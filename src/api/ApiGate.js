@@ -296,9 +296,9 @@ class ApiGate {
     }
 
     async blob(option) {
-        // eslint-disable-next-line no-undef
-        const xhr = new XMLHttpRequest();
-
+        const method = 'post';
+        const options = { ...option, method, action: uploadFileAction};
+        /*
         if (option.onProgress && xhr.upload) {
             xhr.upload.onprogress = function progress(e) {
                 if (e.total > 0) {
@@ -307,76 +307,92 @@ class ApiGate {
                 option.onProgress(e);
             };
         }
+        */
 
-        // eslint-disable-next-line no-undef
         const formData = new FormData();
 
-        if (option.data) {
-            Object.keys(option.data).forEach(key => {
-                const value = option.data[key];
-                // support key-value array data
-                if (Array.isArray(value)) {
-                    value.forEach(item => {
-                        // { list: [ 11, 22 ] }
-                        // formData.append('list[]', 11);
-                        formData.append(`${key}[]`, item);
-                    });
-                    return;
-                }
-
-                formData.append(key, option.data[key]);
-            });
-        }
-
-        // eslint-disable-next-line no-undef
-        if (option.file instanceof Blob) {
-            formData.append(option.filename, option.file, option.file.name);
+        if (options.file instanceof Blob) {
+            formData.append(options.filename, options.file, options.file.name);
         } else {
-            formData.append(option.filename, option.file);
+            formData.append(options.filename, options.file);
         }
 
-        xhr.onerror = function error(e) {
-            option.onError(e);
-        };
+        const that = this;
 
-        xhr.onload = () => {
-            // allow success when 2xx status
-            // see https://github.com/react-component/upload/issues/34
-            if (xhr.status < 200 || xhr.status >= 300) {
-                return option.onError(this._getError(option, xhr), this._getBody(xhr));
+        return new Promise(function (resolve, reject) {
+            var xhr = new XMLHttpRequest();
+
+            xhr.open(method, options.action, true);
+
+            if (options.withCredentials && 'withCredentials' in xhr) {
+                xhr.withCredentials = true;
             }
-
-            return option.onSuccess(this._getBody(xhr), xhr);
-        };
-
-        xhr.open(option.method, uploadFileAction, true);
-
-        // Has to be after `.open()`. See https://github.com/enyo/dropzone/issues/179
-        if (option.withCredentials && 'withCredentials' in xhr) {
-            xhr.withCredentials = true;
-        }
-
-        const headers = option.headers || {};
-
-        // when set headers['X-Requested-With'] = null , can close default XHR header
-        // see https://github.com/react-component/upload/issues/33
-        if (headers['X-Requested-With'] !== null) {
-            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-        }
-
-        Object.keys(headers).forEach(h => {
-            if (headers[h] !== null) {
-                xhr.setRequestHeader(h, headers[h]);
+    
+            const headers = options.headers || {};
+    
+            if (headers['X-Requested-With'] !== null) {
+                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
             }
+    
+            Object.keys(headers).forEach(h => {
+                if (headers[h] !== null) {
+                    xhr.setRequestHeader(h, headers[h]);
+                }
+            });
+
+            xhr.onload = function () {
+                const data = {
+                    response: that._getBody(xhr),
+                    status: this.status,
+                    statusText: xhr.statusText,
+                };
+
+                if (this.status >= 200 && this.status < 300) {
+                    resolve(data);
+                } else {
+                    reject(that._getError(options, xhr));
+                }
+            };
+
+            xhr.onerror = function () {
+                reject(that._getError(options, xhr));
+            };
+
+            xhr.send(formData);
         });
+    }
 
-        xhr.send(formData);
+    // ----- private methods -----
+
+    _getError(option, xhr) {
+        const msg = `cannot ${option.method} ${option.action} ${xhr.status}'`;
+        const err = new Error(msg);
+
+        err.status = xhr.status;
+        err.method = option.method;
+        err.url = option.action;
 
         return {
-            abort() {
-                xhr.abort();
-            },
+            response: this._getBody(xhr),
+            status: xhr.status,
+            statusText: xhr.statusText,
+            message: msg,
+            method: option.method,
+            url: option.action,
         };
+    }
+
+    _getBody(xhr) {
+        const text = xhr.responseText || xhr.response;
+        if (!text) {
+            return text;
+        }
+
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            return text;
+        }
     }
 
     async _fetch(data, url) {
