@@ -1,6 +1,22 @@
 
 
 {
+    "510000000": {
+        "name": "Home",
+        "ml_name": {
+            "enEN": "Home",
+            "nlNL": "Home",
+            "ruRU": "Статистика"
+            
+        },
+        "code": "home",
+        "methods": [
+            "view_change"
+        ],
+        "path": "/plugins/home/index.html",
+        "order": 0,
+        "id": 510000000
+    },
     "510000001": {
         "name": "Reports",
         "ml_name": {
